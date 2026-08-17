@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#080B0A">
+<title>審判甲子園</title>
+<style>
+  :root{
+    --night:#080B0A;
+    --sky:#0E1614;
+    --turf:#16301F;
+    --clay:#5E3E2A;
+    --chalk:#EFEADC;
+    --led-amber:#FFB021;
+    --led-green:#37D66B;
+    --led-red:#F0452F;
+    --led-dim:#3A3325;
+    --panel:#0C110F;
+    --jp:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic Medium","Yu Gothic","Noto Sans JP","Meiryo",sans-serif;
+    --led:ui-monospace,"SFMono-Regular",Menlo,Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--night);}
+  body{
+    font-family:var(--jp);
+    color:var(--chalk);
+    user-select:none;
+    -webkit-user-select:none;
+    overscroll-behavior:none;
+  }
+  #app{
+    position:fixed;inset:0;
+    display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ---------- scoreboard ---------- */
+  .board{
+    flex:0 0 auto;
+    background:linear-gradient(#0A0E0C,#050706);
+    border-bottom:1px solid #1D2622;
+    padding:9px 12px 8px;
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    align-items:center;
+    gap:12px;
+    position:relative;
+  }
+  .board::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(180deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);
+  }
+  .inn{display:flex;align-items:baseline;gap:5px;}
+  .inn b{
+    font-family:var(--led);font-size:28px;line-height:1;font-weight:700;
+    color:var(--led-amber);text-shadow:0 0 9px rgba(255,176,33,.45);
+    font-variant-numeric:tabular-nums;
+  }
+  .inn span{font-size:11px;color:#8A9088;letter-spacing:.08em;}
+  .half{
+    font-family:var(--led);font-size:15px;color:var(--led-amber);
+    text-shadow:0 0 8px rgba(255,176,33,.4);line-height:1;
+  }
+  .pips{display:flex;gap:5px;justify-content:center;}
+  .pip{width:9px;height:9px;border-radius:50%;background:var(--led-dim);}
+  .pip.on{background:var(--led-amber);box-shadow:0 0 7px rgba(255,176,33,.7);}
+  .meta{text-align:right;line-height:1.25;}
+  .meta i{
+    display:block;font-style:normal;font-family:var(--led);font-size:9px;
+    letter-spacing:.16em;color:#6E756D;
+  }
+  .meta u{
+    display:block;text-decoration:none;font-family:var(--led);font-size:16px;
+    color:var(--chalk);font-variant-numeric:tabular-nums;
+  }
+
+  /* ---------- field ---------- */
+  .field{flex:1 1 auto;position:relative;min-height:0;}
+  canvas{display:block;width:100%;height:100%;}
+
+  .flash{
+    position:absolute;left:0;right:0;top:14%;text-align:center;
+    pointer-events:none;opacity:0;
+  }
+  .flash.show{animation:pop .75s ease-out forwards;}
+  @keyframes pop{
+    0%{opacity:0;transform:scale(.82);}
+    12%{opacity:1;transform:scale(1.04);}
+    70%{opacity:1;transform:scale(1);}
+    100%{opacity:0;transform:scale(1);}
+  }
+  .flash b{
+    display:block;font-size:min(15vw,62px);font-weight:900;letter-spacing:.06em;line-height:1;
+  }
+  .flash small{display:block;margin-top:6px;font-size:12px;letter-spacing:.3em;color:#9AA29A;}
+  .flash.strike b{color:var(--led-amber);text-shadow:0 0 26px rgba(255,176,33,.55);}
+  .flash.ball b{color:var(--led-green);text-shadow:0 0 26px rgba(55,214,107,.5);}
+  .flash.miss b{color:var(--led-red);text-shadow:0 0 26px rgba(240,69,47,.6);}
+
+  .claim{
+    position:absolute;bottom:24%;max-width:74%;pointer-events:none;
+    animation:popin .24s cubic-bezier(.2,1.5,.5,1);
+  }
+  .claim.right{right:16px;text-align:right;}
+  .claim.left{left:16px;text-align:left;}
+  @keyframes popin{
+    from{opacity:0;transform:scale(.72) translateY(10px);}
+    to{opacity:1;transform:none;}
+  }
+  .claim .who{
+    display:inline-block;font-family:var(--led);font-size:10px;letter-spacing:.2em;
+    padding:4px 9px;border-radius:3px;margin-bottom:7px;color:#FFF;
+  }
+  .claim.away .who{background:#C0392E;}
+  .claim.home .who{background:#2B4A7C;}
+  .claim .bubble{
+    position:relative;display:inline-block;text-align:left;
+    background:#F4F1E6;color:#14181A;border-radius:16px;padding:13px 16px;
+    font-size:17px;font-weight:800;line-height:1.4;letter-spacing:.01em;
+    box-shadow:0 10px 30px rgba(0,0,0,.65);
+  }
+  .claim .bubble::after{           /* ベンチの方を向くしっぽ */
+    content:"";position:absolute;bottom:-15px;width:0;height:0;
+    border:9px solid transparent;border-top:17px solid #F4F1E6;
+  }
+  .claim.right .bubble::after{right:26px;transform:skewX(-14deg);}
+  .claim.left  .bubble::after{left:26px;transform:skewX(14deg);}
+
+  /* ---------- controls ---------- */
+  .deck{flex:0 0 auto;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:#060908;}
+  .clock{height:4px;background:#151C18;border-radius:2px;overflow:hidden;margin-bottom:10px;}
+  .clock i{display:block;height:100%;width:100%;background:var(--led-amber);transform-origin:left;transition:background .2s;}
+  .clock i.warn{background:var(--led-red);}
+  .calls{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .call{
+    appearance:none;border:2px solid;border-radius:14px;background:transparent;
+    padding:16px 8px 14px;font-family:var(--jp);cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    transition:transform .06s,background .12s,opacity .2s;
+  }
+  .call b{font-size:23px;font-weight:800;letter-spacing:.1em;line-height:1;}
+  .call span{font-family:var(--led);font-size:9px;letter-spacing:.22em;opacity:.65;}
+  .call.b{border-color:#215E38;color:var(--led-green);}
+  .call.s{border-color:#6B4A15;color:var(--led-amber);}
+  .call.b:active{background:rgba(55,214,107,.16);transform:scale(.97);}
+  .call.s:active{background:rgba(255,176,33,.16);transform:scale(.97);}
+  .call:disabled{opacity:.3;cursor:default;}
+  .call:focus-visible{outline:3px solid var(--chalk);outline-offset:3px;}
+
+  /* ---------- overlays ---------- */
+  .veil{
+    position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:26px;
+    background:rgba(4,6,5,.93);backdrop-filter:blur(3px);
+  }
+  .veil[hidden]{display:none;}
+  .eyebrow{font-family:var(--led);font-size:10px;letter-spacing:.4em;color:var(--led-amber);}
+  h1{
+    margin:12px 0 4px;font-size:min(13vw,54px);font-weight:900;letter-spacing:.02em;line-height:1;
+  }
+  h1 em{font-style:normal;color:var(--led-amber);}
+  .sub{font-family:var(--led);font-size:10px;letter-spacing:.34em;color:#7C837B;margin-bottom:26px;}
+  .rules{
+    text-align:left;max-width:340px;font-size:13.5px;line-height:1.75;color:#C6CCC4;
+    border-left:2px solid #2A332D;padding-left:14px;margin-bottom:28px;
+  }
+  .rules b{color:var(--chalk);}
+  .go{
+    appearance:none;border:none;border-radius:100px;background:var(--led-amber);color:#0B0D0A;
+    font-family:var(--jp);font-weight:900;font-size:17px;letter-spacing:.16em;
+    padding:16px 44px;cursor:pointer;
+  }
+  .go:active{transform:scale(.97);}
+  .go:focus-visible{outline:3px solid var(--chalk);outline-offset:3px;}
+  .ghost{
+    margin-top:16px;background:none;border:none;color:#7C837B;font-family:var(--jp);
+    font-size:12px;letter-spacing:.14em;cursor:pointer;padding:8px;
+  }
+  .stat{display:flex;gap:26px;margin:22px 0 4px;}
+  .stat div i{display:block;font-style:normal;font-family:var(--led);font-size:9px;letter-spacing:.18em;color:#6E756D;}
+  .stat div u{display:block;text-decoration:none;font-family:var(--led);font-size:26px;color:var(--chalk);}
+  .verdictline{font-size:14px;color:#C6CCC4;line-height:1.7;max-width:320px;}
+
+  /* ---------- review ---------- */
+  #review{background:rgba(3,5,4,.97);justify-content:flex-start;padding:0;}
+  .revhead{
+    width:100%;padding:14px 16px;border-bottom:1px solid #1D2622;
+    display:flex;align-items:center;gap:9px;background:#070A09;
+  }
+  .rec{width:10px;height:10px;border-radius:50%;background:var(--led-red);animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:.15;}}
+  .revhead b{font-family:var(--led);font-size:11px;letter-spacing:.26em;color:var(--led-red);}
+  .revhead span{margin-left:auto;font-family:var(--led);font-size:10px;letter-spacing:.2em;color:#6E756D;}
+  #revStage{flex:1 1 auto;width:100%;position:relative;min-height:0;}
+  #revStage canvas{position:absolute;inset:0;}
+  .revcap{
+    position:absolute;left:0;right:0;bottom:0;padding:14px 16px;
+    background:linear-gradient(transparent,rgba(3,5,4,.9) 40%);
+  }
+  .revcap .say{font-size:15px;font-weight:700;letter-spacing:.04em;}
+  .revcap .dat{
+    font-family:var(--led);font-size:11px;letter-spacing:.14em;color:#8A9088;margin-top:5px;
+  }
+  .revfoot{
+    width:100%;padding:16px;text-align:center;border-top:1px solid #1D2622;background:#070A09;
+    min-height:96px;display:flex;flex-direction:column;justify-content:center;gap:6px;
+  }
+  .revfoot .big{font-size:24px;font-weight:900;letter-spacing:.08em;}
+  .revfoot .sm{font-size:12px;color:#8A9088;letter-spacing:.1em;}
+  .upheld{color:var(--led-green);}
+  .overturn{color:var(--led-red);}
+  .tap{font-family:var(--led);font-size:9px;letter-spacing:.28em;color:#565C55;}
+  @media (prefers-reduced-motion:reduce){
+    .rec{animation:none;}
+    .flash.show{animation-duration:.45s;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="board">
+    <div class="inn">
+      <b id="bInn">1</b><span>回</span><em class="half" id="bHalf" style="font-style:normal">▲表</em>
+    </div>
+    <div class="pips" id="bPips"></div>
+    <div class="meta">
+      <i>CALLS / STREAK</i>
+      <u><span id="bCalls">0</span><span style="color:#4A514A">/36</span></u>
+    </div>
+  </div>
+
+  <div class="field" id="field">
+    <canvas id="cv"></canvas>
+    <div class="flash" id="flash"><b></b><small></small></div>
+    <div class="claim" id="protest" hidden>
+      <div class="who" id="protestWho"></div>
+      <div class="bubble" id="protestLine"></div>
+    </div>
+  </div>
+
+  <div class="deck">
+    <div class="clock"><i id="clock"></i></div>
+    <div class="calls">
+      <button class="call b" id="btnBall" disabled><b>ボール</b><span>BALL</span></button>
+      <button class="call s" id="btnStrike" disabled><b>ストライク</b><span>STRIKE</span></button>
+    </div>
+  </div>
+
+  <!-- TITLE -->
+  <div class="veil" id="title">
+    <div class="eyebrow">HOME PLATE UMPIRE</div>
+    <h1>審判<em>甲子園</em></h1>
+    <div class="sub">9 INNINGS / 0 MISTAKES</div>
+    <div class="rules">
+      投球を見て <b>ストライク</b> か <b>ボール</b> を判定する。<br>
+      ゾーンは<b>投球前に一瞬だけ</b>表示。投げたら消える。<br>
+      誤審が<b>1球でも</b>あればゲームセット。<br>
+      際どい球には監督から<b>リクエスト</b>が入る。判定が覆れば終了。<br>
+      <b>9回裏</b>まで誤審がなければクリア。
+    </div>
+    <button class="go" id="btnStart" type="button" onclick="window.__startGame && window.__startGame(); return false;">プレイボール</button>
+    <button class="ghost" id="btnSound">🔊 BGM・音声あり</button>
+  </div>
+
+  <!-- REVIEW -->
+  <div class="veil" id="review" hidden>
+    <div class="revhead">
+      <span class="rec"></span><b>REQUEST / リクエスト</b><span id="revInn"></span>
+    </div>
+    <div id="revStage"><canvas id="rcv"></canvas>
+      <div class="revcap">
+        <div class="say" id="revSay"></div>
+        <div class="dat" id="revDat"></div>
+      </div>
+    </div>
+    <div class="revfoot" id="revFoot">
+      <div class="sm" id="revStatus">リプレイ検証中…</div>
+      <div class="tap" id="revTap">TAP TO SKIP</div>
+    </div>
+  </div>
+
+  <!-- END -->
+  <div class="veil" id="end" hidden>
+    <div class="eyebrow" id="endEye"></div>
+    <h1 id="endTitle"></h1>
+    <div class="verdictline" id="endWhy"></div>
+    <div class="stat">
+      <div><i>REACHED</i><u id="endInn"></u></div>
+      <div><i>CALLS</i><u id="endCalls"></u></div>
+    </div>
+    <div style="height:18px"></div>
+    <button class="go" id="btnAgain">もう一度</button>
+  </div>
+
+</div>
+
+<script>
+(() => {
+"use strict";
+
+const $ = s => document.querySelector(s);
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ============ config ============ */
+const HALVES = 18;            // 1回表 … 9回裏
+const PER_HALF = 2;           // 各ハーフイニングの投球数
+const TOTAL = HALVES * PER_HALF;
+const PITCHES = [
+  {n:"ストレート", sw:0.00, rise:-0.22, spd:1.00},
+  {n:"ストレート", sw:0.04, rise:-0.16, spd:1.00},
+  {n:"スライダー", sw:0.34, rise:0.10, spd:0.90},
+  {n:"カーブ",    sw:-0.22, rise:0.40, spd:0.80},
+  {n:"フォーク",   sw:0.02, rise:0.46, spd:0.87},
+  {n:"シュート",   sw:-0.30, rise:0.06, spd:0.93},
+  {n:"チェンジアップ", sw:-0.14, rise:0.30, spd:0.82}
+];
+const lerp = (a,b,t) => a + (b-a)*t;
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const rnd = (a,b) => a + Math.random()*(b-a);
+const pick = a => a[(Math.random()*a.length)|0];
+
+/* ============ audio ============ */
+let actx = null, sound = true;
+function ac(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function tone(f, dur, type, vol, slide){
+  if(!sound) return; const c = ac(); if(!c) return;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type||"sine"; o.frequency.setValueAtTime(f, c.currentTime);
+  if(slide) o.frequency.exponentialRampToValueAtTime(slide, c.currentTime+dur);
+  g.gain.setValueAtTime(vol||0.14, c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime+dur);
+  o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+dur);
+}
+function mitt(){
+  if(!sound) return; const c = ac(); if(!c) return;
+  const n = c.sampleRate*0.12, buf = c.createBuffer(1,n,c.sampleRate), d = buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i] = (Math.random()*2-1)*Math.pow(1-i/n, 5);
+  const s = c.createBufferSource(); s.buffer = buf;
+  const f = c.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 1500; f.Q.value = 0.8;
+  const g = c.createGain(); g.gain.value = 0.5;
+  s.connect(f); f.connect(g); g.connect(c.destination); s.start();
+  tone(90, 0.16, "sine", 0.2, 45);
+}
+
+// 球場の応援スタイルBGM。外部音源は使わず、金管・太鼓・手拍子・歓声をWeb Audioで組み立てる。
+const BPM = 132, STEP = 60/BPM/2;            // 8分音符
+// トランペットの応援フレーズ（4小節×8ステップ）。-1 は前の音を伸ばす、0 は休符。
+const MEL = [
+  523,  0, 523, 659, 784,  -1, 659, 784,
+  880,  0, 784, 659, 523,  -1, 587, 659,
+  659,  0, 659, 784, 880,  -1, 880, 784,
+  784,  0, 880, 784, 659,  -1, 523,  -1
+];
+const BASS = [131, 175, 196, 131];           // C - F - G - C
+let bgmTimer=null, bgmStep=0, bgmNext=0, crowdSrc=null, crowdGain=null;
+
+function bgmBrass(c, f, at, dur, vol){       // 金管: 鋸波＋矩形波を帯域で色付け
+  const o1=c.createOscillator(), o2=c.createOscillator();
+  const bp=c.createBiquadFilter(), g=c.createGain();
+  o1.type='sawtooth'; o2.type='square'; o2.detune.value=8;
+  o1.frequency.value=f; o2.frequency.value=f;
+  bp.type='bandpass'; bp.frequency.value=Math.min(3200, f*2.3); bp.Q.value=1.0;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(vol, at+0.035);        // 立ち上がりを少し遅く
+  g.gain.setValueAtTime(vol, at+dur*0.65);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
+  o1.connect(bp); o2.connect(bp); bp.connect(g); g.connect(c.destination);
+  o1.start(at); o2.start(at); o1.stop(at+dur+0.03); o2.stop(at+dur+0.03);
+}
+function bgmBass(c, f, at, dur, vol){
+  const o=c.createOscillator(), lp=c.createBiquadFilter(), g=c.createGain();
+  o.type='square'; o.frequency.value=f;
+  lp.type='lowpass'; lp.frequency.value=520;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(vol, at+0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
+  o.connect(lp); lp.connect(g); g.connect(c.destination);
+  o.start(at); o.stop(at+dur+0.02);
+}
+function bgmTaiko(c, at, vol){               // 太鼓
+  const o=c.createOscillator(), g=c.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(165, at);
+  o.frequency.exponentialRampToValueAtTime(46, at+0.14);
+  g.gain.setValueAtTime(vol, at);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+0.20);
+  o.connect(g); g.connect(c.destination);
+  o.start(at); o.stop(at+0.22);
+  const n=Math.floor(c.sampleRate*0.03), b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);
+  const s=c.createBufferSource(), sg=c.createGain(); s.buffer=b; sg.gain.value=vol*0.35;
+  s.connect(sg); sg.connect(c.destination); s.start(at);
+}
+function bgmClap(c, at, vol){                // 手拍子（少しばらけさせて群衆っぽく）
+  for(let k=0;k<3;k++){
+    const t=at+k*0.012+Math.random()*0.006;
+    const n=Math.floor(c.sampleRate*0.05), b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,6);
+    const s=c.createBufferSource(), f=c.createBiquadFilter(), g=c.createGain();
+    s.buffer=b; f.type='bandpass'; f.frequency.value=1700; f.Q.value=0.9;
+    g.gain.value=vol*(k===0?1:0.55);
+    s.connect(f); f.connect(g); g.connect(c.destination); s.start(t);
+  }
+}
+function startCrowd(c){                      // 遠くのざわめき
+  if(crowdSrc) return;
+  const n=Math.floor(c.sampleRate*2), b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0);
+  let v=0;
+  for(let i=0;i<n;i++){ v=(v*0.96)+(Math.random()*2-1)*0.04; d[i]=v; }
+  const s=c.createBufferSource(); s.buffer=b; s.loop=true;
+  const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+  const g=c.createGain(); g.gain.value=0.16;
+  const lfo=c.createOscillator(), lg=c.createGain();
+  lfo.frequency.value=0.09; lg.gain.value=0.06;
+  lfo.connect(lg); lg.connect(g.gain);
+  s.connect(lp); lp.connect(g); g.connect(c.destination);
+  s.start(); lfo.start();
+  crowdSrc={s, lfo}; crowdGain=g;
+}
+function stopCrowd(){
+  if(!crowdSrc) return;
+  try{ crowdSrc.s.stop(); crowdSrc.lfo.stop(); }catch(e){}
+  crowdSrc=null; crowdGain=null;
+}
+function bgmTick(){                          // 少し先の音を先読みして予約する
+  if(!sound || game.state==='title' || game.state==='over'){ return; }
+  const c=ac(); if(!c) return;
+  while(bgmNext < c.currentTime + 0.25){
+    const at=Math.max(bgmNext, c.currentTime+0.02);
+    const i=bgmStep%32, beat=i%8, bar=(i/8)|0;
+    const m=MEL[i];
+    if(m>0){
+      let dur=STEP*0.92, k=i;
+      while(MEL[(k+1)%32]===-1 && k-i<3){ dur+=STEP; k++; }   // 伸ばす
+      bgmBrass(c, m, at, dur, 0.040);
+    }
+    if(beat===0) bgmTaiko(c, at, 0.20);
+    else if(beat===4) bgmTaiko(c, at, 0.14);
+    if(beat===2||beat===6) bgmClap(c, at, 0.045);
+    if(beat%2===0) bgmBass(c, BASS[bar], at, STEP*1.5, 0.055);
+    bgmNext+=STEP; bgmStep++;
+  }
+}
+function startBGM(){
+  try{
+    if(!sound) return;
+    const c=ac(); if(!c) return;
+    if(c.state==="suspended") c.resume().catch(()=>{});
+    if(bgmTimer) clearInterval(bgmTimer);
+    bgmStep=0; bgmNext=c.currentTime+0.12;
+    startCrowd(c);
+    bgmTick();
+    bgmTimer=setInterval(()=>{ try{ bgmTick(); }catch(e){} }, 60);
+  }catch(e){}
+}
+function stopBGM(){
+  if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; }
+  stopCrowd();
+}
+
+/* ---- 判定コール音声 ここから ----
+   実在ゲームの音声サンプルは使わず、母音のフォルマント（共鳴）と
+   子音のノイズを組み立てて「ストライク」「ボール」と発話させる。 */
+const VOWEL = {                 // [F1, F2, F3] 男声の目安
+  a:[760,1180,2540], i:[300,2250,3000], u:[380,1150,2450],
+  e:[520,1780,2560], o:[490, 900,2450],
+  O:[575, 870, 2400]           // 伸ばす「オー」は口を開き気味に
+};
+function noiseBuf(c, dur){
+  const n = Math.max(1, Math.floor(c.sampleRate*dur));
+  const b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i] = Math.random()*2-1;
+  return b;
+}
+function crushCurve(c){         // 量子化して8bitらしいざらつきを出す
+  const ws = c.createWaveShaper(), n = 1024, curve = new Float32Array(n), steps = 7;
+  for(let i=0;i<n;i++){
+    const x = i/(n-1)*2-1;
+    curve[i] = Math.max(-1, Math.min(1, Math.round(x*steps)/steps * 1.25));
+  }
+  ws.curve = curve; ws.oversample = "none";
+  return ws;
+}
+function burst(c, at, dur, type, freq, q, g, dest){
+  const src = c.createBufferSource(); src.buffer = noiseBuf(c, dur+0.01);
+  const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const gg = c.createGain();
+  gg.gain.setValueAtTime(0.0001, at);
+  gg.gain.linearRampToValueAtTime(g, at+0.006);
+  gg.gain.exponentialRampToValueAtTime(0.0001, at+dur);
+  src.connect(f); f.connect(gg); gg.connect(dest);
+  src.start(at); src.stop(at+dur+0.02);
+}
+// syl: {c:子音, v:母音, d:長さ秒, f:基本周波数, g:音量倍率}
+function speak(syls, vol, rasp){
+  if(!sound) return; const c = ac(); if(!c) return;
+  const t0 = c.currentTime + 0.02;
+
+  const out = c.createGain(); out.gain.value = vol;
+  const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3600;
+  const ws = crushCurve(c);
+  ws.connect(lp); lp.connect(out); out.connect(c.destination);
+
+  // 球場の空気: 短いディレイを薄く混ぜて張り上げた声にする
+  const dl = c.createDelay(0.5); dl.delayTime.value = 0.075;
+  const fb = c.createGain(); fb.gain.value = 0.24;
+  const dlp = c.createBiquadFilter(); dlp.type = "lowpass"; dlp.frequency.value = 2000;
+  const wet = c.createGain(); wet.gain.value = 0.38;
+  lp.connect(dl); dl.connect(dlp); dlp.connect(fb); fb.connect(dl); dlp.connect(wet); wet.connect(out);
+
+  // 声帯の代わり: 矩形波＋鋸波
+  const src1 = c.createOscillator(); src1.type = "square";
+  const src2 = c.createOscillator(); src2.type = "sawtooth";
+  const mix2 = c.createGain(); mix2.gain.value = 0.5;
+  const voice = c.createGain(); voice.gain.value = 0.0001;   // 有声音の包絡
+  src1.connect(voice); src2.connect(mix2); mix2.connect(voice);
+
+  // 息のざらつき（声を張り上げた感じを出す）
+  const rs = c.createBufferSource(); rs.buffer = noiseBuf(c, 0.6); rs.loop = true;
+  const rg = c.createGain(); rg.gain.value = (rasp === undefined ? 0.12 : rasp);
+  rs.connect(rg); rg.connect(voice);
+
+  // フォルマント3本
+  const F = [], FGN = [], FG = [0.72, 0.62, 0.26];
+  for(let k=0;k<3;k++){
+    const bp = c.createBiquadFilter();
+    bp.type = "bandpass"; bp.Q.value = [6, 6, 5][k];   // 広めにして倍音を拾わせる
+    bp.frequency.value = VOWEL.a[k];
+    const g = c.createGain(); g.gain.value = FG[k];
+    voice.connect(bp); bp.connect(g); g.connect(ws);
+    F.push(bp); FGN.push(g);
+  }
+  // わずかな揺らぎ
+  const lfo = c.createOscillator(), lg = c.createGain();
+  lfo.frequency.value = 5.5; lg.gain.value = 3.5;
+  lfo.connect(lg); lg.connect(src1.frequency); lg.connect(src2.frequency);
+
+  const cur = [VOWEL.a[0], VOWEL.a[1], VOWEL.a[2]];
+  let t = t0;
+  for(let i=0;i<syls.length;i++){
+    const s = syls[i];
+    const cd = s.c === "s" ? 0.075 : s.c ? 0.026 : 0;
+    const vs = t + cd, ve = t + s.d;
+
+    if(s.c === "s")      burst(c, t, 0.075, "highpass", 4200, 0.7, 0.055, ws);
+    else if(s.c === "t") burst(c, t, 0.022, "bandpass", 2700, 1.2, 0.10, ws);
+    else if(s.c === "k") burst(c, t, 0.024, "bandpass", 1900, 1.0, 0.10, ws);
+    else if(s.c === "b") burst(c, t, 0.022, "lowpass",   430, 0.8, 0.14, ws);
+    else if(s.c === "r") burst(c, Math.max(t0, vs-0.014), 0.014, "bandpass", 1500, 1.3, 0.045, ws);
+
+    const V = VOWEL[s.v], br = s.b === undefined ? 1 : s.b;   // 高域フォルマントの強調
+    FGN[1].gain.setValueAtTime(FG[1]*br, vs);
+    FGN[2].gain.setValueAtTime(FG[2]*br, vs);
+    for(let k=0;k<3;k++){
+      F[k].frequency.setValueAtTime(cur[k], Math.max(t0, vs-0.03));
+      F[k].frequency.linearRampToValueAtTime(V[k], vs+0.02);   // 母音を滑らかに渡す
+      cur[k] = V[k];
+    }
+    if(s.sc){                                      // 出だしをしゃくり上げる
+      src1.frequency.setValueAtTime(s.f*s.sc, vs);
+      src2.frequency.setValueAtTime(s.f*s.sc, vs);
+      src1.frequency.linearRampToValueAtTime(s.f, vs+0.045);
+      src2.frequency.linearRampToValueAtTime(s.f, vs+0.045);
+    } else {
+      src1.frequency.setValueAtTime(s.f, vs);
+      src2.frequency.setValueAtTime(s.f, vs);
+    }
+    if(i === syls.length-1){                       // 語尾は下げる
+      const ef = s.f*(s.e === undefined ? 0.78 : s.e);
+      src1.frequency.linearRampToValueAtTime(ef, ve);
+      src2.frequency.linearRampToValueAtTime(ef, ve);
+    }
+    // 有声音の立ち上がり／立ち下がり（ラ行は一瞬へこませる）
+    const A = s.g === undefined ? 1 : s.g;
+    voice.gain.setValueAtTime(s.c === "r" ? 0.25*A : 0.0001, vs);
+    voice.gain.linearRampToValueAtTime(A, vs + (s.c === "r" ? 0.030 : 0.016));
+    voice.gain.setValueAtTime(A, ve - 0.026);
+    voice.gain.linearRampToValueAtTime(i === syls.length-1 ? 0.0001 : 0.30*A, ve);
+    t += s.d;
+  }
+
+  const end = t + 0.05;
+  [src1, src2, lfo].forEach(o => { o.start(t0); o.stop(end); });
+  rs.start(t0); rs.stop(end);
+  out.gain.setValueAtTime(vol, end-0.04);
+  out.gain.linearRampToValueAtTime(0.0001, end);
+}
+function roboCall(isStrike){
+  if(isStrike){
+    // ス・ト・ラ・イ・ク
+    speak([
+      {c:"s", v:"u", d:0.090, f:192, g:0.70},
+      {c:"t", v:"o", d:0.075, f:206, g:0.88},
+      {c:"r", v:"a", d:0.085, f:220, g:1.00},
+      {        v:"i", d:0.165, f:248, g:1.00, b:1.45},  // ここを伸ばして張り上げる
+      {c:"k", v:"u", d:0.105, f:196, g:0.80, b:1.5}
+    ], 0.40, 0.26);
+  } else {
+    // ボ・ー・ル
+    // ボ・オ・ル（低く落ち着いた声で、語尾をゆっくり落とす）
+    speak([
+      {c:"b", v:"o", d:0.140, f:152, g:0.92, sc:0.78},
+      {        v:"O", d:0.175, f:164, g:1.00},
+      {c:"r", v:"u", d:0.170, f:142, g:0.86, e:0.70, b:2.0}
+    ], 0.36, 0.14);
+  }
+}
+/* ---- 判定コール音声 ここまで ---- */
+
+/* ============ canvas ============ */
+const cv = $("#cv"), ctx = cv.getContext("2d");
+const rcv = $("#rcv"), rctx = rcv.getContext("2d");
+let W=0, H=0, Z={};
+
+function fit(cnv, c2d){
+  const r = cnv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio||1, 2.5);
+  cnv.width = Math.max(1, Math.round(r.width*dpr));
+  cnv.height = Math.max(1, Math.round(r.height*dpr));
+  c2d.setTransform(dpr,0,0,dpr,0,0);
+  return {w:r.width, h:r.height};
+}
+function layout(){
+  const s = fit(cv, ctx); W = s.w; H = s.h;
+  fit(rcv, rctx);
+  const base = Math.min(W, H*0.66);
+  const zw = base*0.32, zh = zw/0.70;
+  Z = {
+    x: W*0.5, y: H*0.545, w: zw, h: zh,
+    r: zw*0.088,                 // ボール半径（実寸比に近い）
+    rx: W*0.5, ry: H*0.288,      // リリースポイント
+    close: zw*0.088*0.62         // 際どい判定のしきい値
+  };
+}
+addEventListener("resize", () => { layout(); if(game.state==="title") draw(0); });
+
+/* ============ pitch math ============ */
+// 判定: ボールの円がゾーン矩形に少しでも掛かればストライク
+function judge(bx, by){
+  const ox = Z.w/2 + Z.r - Math.abs(bx - Z.x);
+  const oy = Z.h/2 + Z.r - Math.abs(by - Z.y);
+  if(ox > 0 && oy > 0) return {strike:true, margin: Math.min(ox, oy)};
+  const dx = Math.max(-ox, 0), dy = Math.max(-oy, 0);
+  return {strike:false, margin: -Math.hypot(dx, dy)};
+}
+function makeTarget(kind){
+  const hw = Z.w/2 + Z.r, hh = Z.h/2 + Z.r, t = Z.close;
+  if(kind === "close"){
+    const side = Math.random();
+    const off = rnd(-t*0.92, t*0.92);
+    if(side < 0.34) return {x: Z.x - hw + off, y: Z.y + rnd(-1,1)*(Z.h*0.34)};
+    if(side < 0.68) return {x: Z.x + hw - off, y: Z.y + rnd(-1,1)*(Z.h*0.34)};
+    if(side < 0.85) return {x: Z.x + rnd(-1,1)*(Z.w*0.34), y: Z.y - hh + off};
+    return {x: Z.x + rnd(-1,1)*(Z.w*0.34), y: Z.y + hh - off};
+  }
+  if(kind === "strike"){
+    const mx = Math.max(4, hw - t*1.5), my = Math.max(4, hh - t*1.5);
+    return {x: Z.x + rnd(-1,1)*mx*0.92, y: Z.y + rnd(-1,1)*my*0.92};
+  }
+  // clear ball
+  const a = Math.random()*Math.PI*2, d = rnd(t*1.9, Z.w*0.85);
+  const ux = Math.cos(a), uy = Math.sin(a);
+  return {x: Z.x + ux*(hw + d), y: Z.y + uy*(hh + d*0.8)};
+}
+function newPitch(h){
+  const p = h/(HALVES-1);
+  const pClose = lerp(0.18, 0.55, p);
+  const kind = Math.random() < pClose ? "close" : (Math.random() < 0.5 ? "strike" : "ball");
+  let tgt = makeTarget(kind), v = judge(tgt.x, tgt.y), tries = 0;
+  const ok = () => kind === "close" ? Math.abs(v.margin) <= Z.close
+                 : kind === "strike" ? v.margin > Z.close
+                 : v.margin < -Z.close;
+  while(!ok() && tries++ < 60){ tgt = makeTarget(kind); v = judge(tgt.x, tgt.y); }
+  const type = pick(PITCHES);
+  const flight = lerp(1.05, 0.62, p) / type.spd * rnd(0.97,1.03);
+  const kmh = Math.round(lerp(129, 156, p) * type.spd * rnd(0.99,1.02));
+  return {
+    tx: tgt.x, ty: tgt.y, type, flight, kmh,
+    swerve: type.sw * Z.w * rnd(0.8,1.2) * (Math.random()<0.5?1:-1) * 0.9,
+    rise: type.rise * Z.h * 0.55,
+    truth: v.strike, margin: v.margin,
+    close: Math.abs(v.margin) <= Z.close
+  };
+}
+function ballAt(p, t){                       // t:0..1
+  const e = Math.pow(t, 1.55);
+  const x = lerp(Z.rx, p.tx, e) + p.swerve*Math.sin(Math.PI*e);
+  const y = lerp(Z.ry, p.ty, e) + p.rise*Math.sin(Math.PI*e);
+  const r = Z.r * (0.13 + 0.87*Math.pow(t, 2.5));
+  return {x, y, r};
+}
+
+/* ============ scene drawing ============ */
+let lights = [];
+function seedLights(){
+  lights = [];
+  for(let i=0;i<26;i++) lights.push({x:Math.random(), y:Math.random()*0.16, s:Math.random()});
+}
+seedLights();
+
+function drawField(){
+  const hz = H*0.30;
+  let g = ctx.createLinearGradient(0,0,0,hz);
+  g.addColorStop(0,"#05080A"); g.addColorStop(1,"#111B18");
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,hz);
+
+  // 照明のにじみ
+  ctx.save();
+  for(const l of lights){
+    const x = l.x*W, y = l.y*hz*0.9 + hz*0.02, r = 12 + l.s*26;
+    const rg = ctx.createRadialGradient(x,y,0,x,y,r);
+    rg.addColorStop(0,"rgba(255,224,170,"+(0.16+l.s*0.16)+")");
+    rg.addColorStop(1,"rgba(255,224,170,0)");
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+  }
+  ctx.restore();
+
+  // 外野〜内野の芝
+  g = ctx.createLinearGradient(0,hz,0,H);
+  g.addColorStop(0,"#16301F"); g.addColorStop(0.55,"#12281A"); g.addColorStop(1,"#0B1810");
+  ctx.fillStyle = g; ctx.fillRect(0,hz,W,H-hz);
+
+  // 芝の縞
+  ctx.save(); ctx.globalAlpha = 0.06; ctx.fillStyle = "#8FE6A5";
+  for(let i=0;i<7;i++){
+    const t0 = i/7, t1 = (i+0.5)/7;
+    ctx.beginPath();
+    ctx.moveTo(W*0.5 - W*1.6*t0, H); ctx.lineTo(W*0.5 - W*1.6*t1, H);
+    ctx.lineTo(W*0.5 - W*0.10*t1, hz); ctx.lineTo(W*0.5 - W*0.10*t0, hz);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+
+  // マウンド
+  const mx = W*0.5, my = H*0.322;
+  ctx.fillStyle = "#4C3423";
+  ctx.beginPath(); ctx.ellipse(mx, my, W*0.16, H*0.030, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.10)";
+  ctx.fillRect(mx - W*0.035, my - H*0.004, W*0.07, H*0.006);
+}
+
+/* ============ 人物描画 ============ */
+const HOME = { jersey:"#E7E3D8", shade:"#AFAA9D", accent:"#1B3157", accent2:"#2B4A7C", skin:"#B98D66", shoe:"#12161A", belt:"#16233A" };
+const AWAY = { jersey:"#A8AEB4", shade:"#767C83", accent:"#7C2130", accent2:"#A03242", skin:"#B98D66", shoe:"#12161A", belt:"#2A1216" };
+
+// 先細りのカプセル（腕・脚・胴）
+function seg(x1,y1,x2,y2,w1,w2,fill){
+  const a = Math.atan2(y2-y1, x2-x1);
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.arc(x1, y1, w1/2, a+Math.PI/2, a+Math.PI*1.5);
+  ctx.arc(x2, y2, w2/2, a-Math.PI/2, a+Math.PI/2);
+  ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.globalAlpha=.22; ctx.strokeStyle="#0A0D0C"; ctx.lineWidth=Math.max(.012,Math.min(w1,w2)*.08); ctx.stroke(); ctx.restore();
+}
+function blob(x,y,rx,ry,rot,fill){
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.ellipse(x,y,rx,ry,rot||0,0,7); ctx.fill();
+  ctx.save(); ctx.globalAlpha=.20; ctx.strokeStyle="#0A0D0C"; ctx.lineWidth=Math.max(.012,Math.min(rx,ry)*.12); ctx.stroke(); ctx.restore();
+}
+function shadowPad(x,y,rx,ry){
+  ctx.fillStyle = "rgba(0,0,0,.42)";
+  ctx.beginPath(); ctx.ellipse(x,y,rx,ry,0,0,7); ctx.fill();
+}
+const P = (x,y) => [x,y];
+function mixPose(A,B,t){
+  const o = {};
+  for(const k in A) o[k] = [lerp(A[k][0],B[k][0],t), lerp(A[k][1],B[k][1],t)];
+  return o;
+}
+
+/* ---- 投手: セット → 足上げ → リリース → フォロースルー ---- */
+const PP = {
+  set: {
+    hip:P(0,-.95), sh:P(0,-1.44), head:P(-.02,-1.70),
+    bKnee:P(-.13,-.48), bFoot:P(-.15,0), fKnee:P(.13,-.48), fFoot:P(.15,0),
+    tElb:P(.14,-1.28), tHand:P(.03,-1.14), gElb:P(-.14,-1.28), gHand:P(-.02,-1.12)
+  },
+  kick: {
+    hip:P(-.06,-1.02), sh:P(-.09,-1.50), head:P(-.11,-1.77),
+    bKnee:P(-.14,-.50), bFoot:P(-.16,0), fKnee:P(.30,-1.06), fFoot:P(.10,-.60),
+    tElb:P(.06,-1.62), tHand:P(-.04,-1.82), gElb:P(-.18,-1.56), gHand:P(-.12,-1.76)
+  },
+  release: {
+    hip:P(.06,-.90), sh:P(.02,-1.38), head:P(-.03,-1.64),
+    bKnee:P(-.24,-.54), bFoot:P(-.30,-.12), fKnee:P(.28,-.44), fFoot:P(.36,.10),
+    tElb:P(.32,-1.46), tHand:P(.48,-1.60), gElb:P(-.28,-1.24), gHand:P(-.42,-1.04)
+  },
+  follow: {
+    hip:P(.10,-.86), sh:P(.12,-1.30), head:P(.08,-1.54),
+    bKnee:P(-.30,-.88), bFoot:P(-.54,-1.06), fKnee:P(.32,-.44), fFoot:P(.38,.12),
+    tElb:P(.18,-1.12), tHand:P(-.20,-.82), gElb:P(-.24,-1.18), gHand:P(-.34,-1.28)
+  }
+};
+
+function drawPitcher(phase, after){
+  const s = H*0.125;                       // 身長
+  const p = clamp(phase,0,1), a = clamp(after,0,1);
+  let po;
+  if(p < 1)      po = p < .55 ? mixPose(PP.set, PP.kick, p/.55) : mixPose(PP.kick, PP.release, (p-.55)/.45);
+  else           po = mixPose(PP.release, PP.follow, Math.min(1, a/0.35));
+  const C = HOME;
+
+  ctx.save();
+  ctx.translate(W*0.5, H*0.330);
+  ctx.scale(s, s);
+  ctx.lineJoin = "round";
+
+  shadowPad(0, .03, .42, .09);
+
+  const legW = .21, armW = .13;
+  // 奥の脚・腕
+  seg(po.hip[0], po.hip[1], po.bKnee[0], po.bKnee[1], legW, legW*.82, C.shade);
+  seg(po.bKnee[0], po.bKnee[1], po.bFoot[0], po.bFoot[1], legW*.82, .13, C.shade);
+  blob(po.bFoot[0], po.bFoot[1]+.02, .11, .05, 0, C.shoe);
+  seg(po.sh[0], po.sh[1], po.gElb[0], po.gElb[1], armW, armW*.85, C.accent);
+  seg(po.gElb[0], po.gElb[1], po.gHand[0], po.gHand[1], armW*.85, .09, C.skin);
+
+  // 手前の脚
+  seg(po.hip[0], po.hip[1], po.fKnee[0], po.fKnee[1], legW*1.05, legW*.85, C.jersey);
+  seg(po.fKnee[0], po.fKnee[1], po.fFoot[0], po.fFoot[1], legW*.85, .14, C.accent);
+  blob(po.fFoot[0], po.fFoot[1]+.02, .12, .055, 0, C.shoe);
+
+  // 胴
+  seg(po.hip[0], po.hip[1], po.sh[0], po.sh[1], .34, .40, C.jersey);
+  // ベルト
+  seg(po.hip[0]-.13, po.hip[1]-.03, po.hip[0]+.13, po.hip[1]-.03, .085, .085, C.belt);
+  // 胸のロゴ風ラインと前立て
+  ctx.fillStyle=C.accent; ctx.font="700 .12px sans-serif"; ctx.textAlign="center"; ctx.fillText("K",po.sh[0],po.sh[1]+.20);
+  ctx.strokeStyle = C.accent; ctx.lineWidth = .035;
+  ctx.beginPath(); ctx.moveTo(po.hip[0], po.hip[1]-.05); ctx.lineTo(po.sh[0], po.sh[1]+.06); ctx.stroke();
+
+  // 首・頭
+  const hr = .17;
+  seg(po.sh[0], po.sh[1], po.head[0], po.head[1]+hr*.7, .13, .13, C.skin);
+  blob(po.head[0], po.head[1], hr, hr*1.05, 0, C.skin);
+  // キャップ
+  ctx.fillStyle = C.accent;
+  ctx.beginPath(); ctx.arc(po.head[0], po.head[1]-.02, hr*1.02, Math.PI*1.02, Math.PI*2.02); ctx.fill();
+  blob(po.head[0]-hr*.75, po.head[1]-.03, hr*.75, hr*.30, -.12, C.accent);
+
+  // 投げ腕（手前）
+  seg(po.sh[0], po.sh[1], po.tElb[0], po.tElb[1], armW*1.05, armW*.9, C.accent);
+  seg(po.tElb[0], po.tElb[1], po.tHand[0], po.tHand[1], armW*.9, .10, C.skin);
+  // ボール（リリース前）
+  if(p < 1 || a < .05){
+    ctx.fillStyle = "#F7F4EA";
+    ctx.beginPath(); ctx.arc(po.tHand[0], po.tHand[1], .07, 0, 7); ctx.fill();
+  }
+  // グラブ
+  blob(po.gHand[0], po.gHand[1], .16, .19, .3, "#3A2312");
+  ctx.restore();
+}
+
+/* ---- 打者 ---- */
+function drawBatter(phase, after, lefty){
+  const side = lefty ? -1 : 1;          // 局所座標: +x = ベースと反対（背中側）
+  const s = Z.h*1.42;                   // 身長
+  const bx = Z.x + side*Z.w*1.06;
+  const feet = Z.y + Z.h*0.74 + Z.r*2.2;
+  const load = Math.sin(clamp(phase,0,1)*Math.PI)*0.45 + clamp(after,0,1)*0.55;
+  const C = AWAY;
+
+  ctx.save();
+  ctx.translate(bx, feet);
+  ctx.scale(side*s, s);                 // 常にベース側を向く
+  ctx.lineJoin = "round";
+
+  shadowPad(0, .008, .26, .040);
+
+  const dip = load*.020, back = load*.014;
+  const hip   = [ .01 + back,  -.480 + dip];
+  const sh    = [-.015 + back, -.755 + dip*.8];
+  const head  = [-.030 + back, -.878 + dip*.7];
+  const bKnee = [-.115,        -.250 + dip*.6];
+  const bFoot = [-.170,        -.005];
+  const fKnee = [ .130,        -.250 + dip*.5];
+  const fFoot = [ .175,        -.005];
+  const hands = [ .105 + back*1.6, -.772 + dip*.7];
+
+  const legW = .115, armW = .066;
+
+  // 奥脚（ベース側）
+  seg(hip[0], hip[1], bKnee[0], bKnee[1], legW, legW*.8, C.shade);
+  seg(bKnee[0], bKnee[1], bFoot[0], bFoot[1], legW*.72, .068, C.accent);
+  blob(bFoot[0]-.018, bFoot[1], .070, .026, 0, C.shoe);
+  // 手前脚
+  seg(hip[0], hip[1], fKnee[0], fKnee[1], legW*1.05, legW*.82, C.jersey);
+  seg(fKnee[0], fKnee[1], fFoot[0], fFoot[1], legW*.74, .070, C.accent);
+  blob(fFoot[0]+.018, fFoot[1], .072, .028, 0, C.shoe);
+  // 胴とベルト
+  seg(hip[0], hip[1], sh[0], sh[1], .175, .210, C.jersey);
+  seg(hip[0]-.075, hip[1]-.012, hip[0]+.075, hip[1]-.012, .048, .048, C.belt);
+  ctx.strokeStyle = C.accent; ctx.lineWidth = .016;
+  ctx.beginPath(); ctx.moveTo(hip[0]-.03, hip[1]-.04); ctx.lineTo(sh[0]-.045, sh[1]+.05); ctx.stroke();
+
+  // 奥の腕（肘をたたむ）
+  seg(sh[0], sh[1]+.01, sh[0]+.070, sh[1]+.075, armW, armW*.85, C.shade);
+  seg(sh[0]+.070, sh[1]+.075, hands[0]-.014, hands[1]+.016, armW*.8, .046, C.skin);
+  // 首・頭
+  seg(sh[0], sh[1], head[0], head[1]+.042, .070, .068, C.skin);
+  blob(head[0], head[1], .068, .074, 0, C.skin);
+  // ヘルメット（つばはベース側）
+  ctx.fillStyle = C.accent;
+  ctx.beginPath(); ctx.arc(head[0], head[1]-.006, .075, Math.PI*.97, Math.PI*2.07); ctx.fill();
+  blob(head[0]-.052, head[1]-.014, .052, .021, -.1, C.accent);
+  blob(head[0]+.042, head[1]+.014, .032, .042, 0, C.accent2);
+  // バット（背中側へ立てる）
+  ctx.save();
+  ctx.translate(hands[0], hands[1]);
+  ctx.rotate(0.40 + load*.13);
+  const bl = .50;
+  ctx.fillStyle = "#C0904F";
+  ctx.beginPath();
+  ctx.moveTo(-.020, .02); ctx.lineTo(-.023, -bl*.5);
+  ctx.quadraticCurveTo(-.052, -bl, .001, -bl);
+  ctx.quadraticCurveTo(.055, -bl, .027, -bl*.48);
+  ctx.lineTo(.020, .02); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "rgba(255,238,205,.35)"; ctx.lineWidth = .008;
+  ctx.beginPath(); ctx.moveTo(.021, -bl*.52); ctx.lineTo(.011, -bl*.92); ctx.stroke();
+  ctx.fillStyle = "#3A2A18";
+  ctx.beginPath(); ctx.arc(0, .035, .026, 0, 7); ctx.fill();
+  ctx.restore();
+  // 手前の腕と両手
+  seg(sh[0]+.012, sh[1]+.018, sh[0]+.055, sh[1]+.088, armW*1.05, armW*.85, C.accent);
+  seg(sh[0]+.055, sh[1]+.088, hands[0], hands[1]+.006, armW*.85, .048, C.skin);
+  blob(hands[0], hands[1], .030, .027, 0, C.accent2);
+  blob(hands[0]-.004, hands[1]+.030, .028, .025, 0, C.accent);
+  ctx.restore();
+}
+
+function drawPlate(){
+  const py = Z.y + Z.h*0.62 + Z.r*2.2, hw = Z.w*0.92;
+  ctx.save();
+  // 打席のライン（手前が広がる遠近）
+  ctx.strokeStyle = "rgba(239,234,220,.30)"; ctx.lineWidth = 2;
+  for(const d of [-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(Z.x + d*hw*0.62, py - Z.h*0.10);
+    ctx.lineTo(Z.x + d*hw*2.05, py - Z.h*0.10);
+    ctx.lineTo(Z.x + d*hw*2.45, py + Z.h*0.40);
+    ctx.lineTo(Z.x + d*hw*0.70, py + Z.h*0.40);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(239,234,220,.82)";
+  ctx.beginPath();
+  ctx.moveTo(Z.x - hw*0.5, py);
+  ctx.lineTo(Z.x + hw*0.5, py);
+  ctx.lineTo(Z.x + hw*0.62, py + Z.h*0.10);
+  ctx.lineTo(Z.x, py + Z.h*0.19);
+  ctx.lineTo(Z.x - hw*0.62, py + Z.h*0.10);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawZone(mode, alpha){
+  const x = Z.x - Z.w/2, y = Z.y - Z.h/2, w = Z.w, h = Z.h;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = "#EFEADC";
+  ctx.lineWidth = 1.6;
+  if(mode === "full"){
+    ctx.setLineDash([5,6]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.globalAlpha = alpha*0.35;
+    ctx.setLineDash([2,7]);
+    ctx.beginPath();
+    ctx.moveTo(x, y+h/3); ctx.lineTo(x+w, y+h/3);
+    ctx.moveTo(x, y+h*2/3); ctx.lineTo(x+w, y+h*2/3);
+    ctx.moveTo(x+w/3, y); ctx.lineTo(x+w/3, y+h);
+    ctx.moveTo(x+w*2/3, y); ctx.lineTo(x+w*2/3, y+h);
+    ctx.stroke();
+  } else {
+    const k = Math.min(w,h)*0.20;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x, y+k); ctx.lineTo(x, y); ctx.lineTo(x+k, y);
+    ctx.moveTo(x+w-k, y); ctx.lineTo(x+w, y); ctx.lineTo(x+w, y+k);
+    ctx.moveTo(x+w, y+h-k); ctx.lineTo(x+w, y+h); ctx.lineTo(x+w-k, y+h);
+    ctx.moveTo(x+k, y+h); ctx.lineTo(x, y+h); ctx.lineTo(x, y+h-k);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 捕手は球審のすぐ前。背中越しに見える
+function drawCatcher(gx, gy, gr){
+  const cx = W*0.5, top = H*0.825, s = W*0.27, C = HOME;
+  ctx.save();
+  ctx.lineJoin = "round";
+
+  // 両脚（がに股に開いた太もも＋レガース）
+  for(const d of [-1,1]){
+    const hipX = cx + d*s*0.24, hipY = H - s*0.10;
+    const kneeX = cx + d*s*0.74, kneeY = top + s*0.50;
+    seg(hipX, hipY, kneeX, kneeY, s*0.42, s*0.34, C.shade);
+    // レガースの膝カップ
+    blob(kneeX, kneeY, s*0.28, s*0.24, d*0.25, C.accent);
+    blob(kneeX - d*s*0.04, kneeY - s*0.03, s*0.21, s*0.17, d*0.25, C.accent2);
+    ctx.strokeStyle = "rgba(255,235,200,.30)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(kneeX, kneeY, s*0.27, s*0.23, d*0.25, Math.PI*1.05, Math.PI*1.95); ctx.stroke();
+    // すね側の板が下に覗く
+    blob(cx + d*s*0.86, top + s*0.86, s*0.20, s*0.26, d*0.18, C.accent);
+  }
+
+  // 上腕（胴に隠れる部分）
+  let elb = null;
+  if(gr){
+    const sx0 = cx - s*0.42, sy0 = top + s*0.16;
+    const dx = sx0 - gx, dy = sy0 - gy, d = Math.max(1, Math.hypot(dx,dy));
+    const reach = Math.min(d*0.62, s*0.95);          // 前腕の長さを制限
+    elb = [gx + dx/d*reach - s*0.05, gy + dy/d*reach + s*0.03];
+    seg(sx0, sy0, elb[0], elb[1], s*0.24, s*0.17, C.jersey);
+  }
+
+  // 背中（ユニフォーム）
+  ctx.fillStyle = C.jersey;
+  ctx.beginPath();
+  ctx.moveTo(cx - s*1.02, H + 10);
+  ctx.quadraticCurveTo(cx - s*0.80, top + s*0.16, cx - s*0.52, top + s*0.02);
+  ctx.quadraticCurveTo(cx, top - s*0.14, cx + s*0.52, top + s*0.02);
+  ctx.quadraticCurveTo(cx + s*0.80, top + s*0.16, cx + s*1.02, H + 10);
+  ctx.closePath(); ctx.fill();
+  // 下半分に落ちる影
+  const gd = ctx.createLinearGradient(0, top, 0, H);
+  gd.addColorStop(0, "rgba(0,0,0,0)"); gd.addColorStop(1, "rgba(0,0,0,.45)");
+  ctx.fillStyle = gd; ctx.fill();
+
+  // 背番号
+  ctx.save();
+  ctx.fillStyle = C.accent;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "800 " + (s*0.30).toFixed(1) + "px ui-sans-serif, system-ui, sans-serif";
+  ctx.globalAlpha = 0.7;
+  ctx.fillText("27", cx, top + s*0.78);
+  ctx.restore();
+
+  // プロテクターのハーネス（背中でクロス）
+  ctx.strokeStyle = "rgba(20,26,40,.62)"; ctx.lineWidth = s*0.055; ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx - s*0.40, top + s*0.06); ctx.lineTo(cx + s*0.24, top + s*0.46);
+  ctx.moveTo(cx + s*0.40, top + s*0.06); ctx.lineTo(cx - s*0.24, top + s*0.46);
+  ctx.stroke();
+
+  // 肩のハイライト
+  ctx.strokeStyle = "rgba(255,238,205,.35)"; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx - s*0.56, top + s*0.06);
+  ctx.quadraticCurveTo(cx, top - s*0.13, cx + s*0.56, top + s*0.06);
+  ctx.stroke();
+
+  // 首とマスクのストラップ
+  const hy = top - s*0.24, hr = s*0.31;
+  seg(cx, top - s*0.02, cx, hy + hr*0.7, s*0.24, s*0.22, C.skin);
+  // ヘルメット（後頭部）
+  blob(cx, hy, hr, hr*1.04, 0, C.accent);
+  ctx.strokeStyle = "rgba(255,238,205,.30)"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(cx, hy, hr*0.94, Math.PI*1.06, Math.PI*1.94); ctx.stroke();
+  // マスクの締めベルト
+  ctx.strokeStyle = "rgba(18,22,30,.85)"; ctx.lineWidth = s*0.032;
+  for(const k of [-0.09, 0.09]){
+    ctx.beginPath(); ctx.moveTo(cx - hr*0.98, hy + s*k); ctx.lineTo(cx + hr*0.98, hy + s*k); ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(150,158,168,.55)";
+  ctx.beginPath(); ctx.ellipse(cx, hy + s*0.02, s*0.026, s*0.055, 0, 0, 7); ctx.fill();
+
+  // 前腕 → ミット
+  if(gr && elb){
+    seg(elb[0], elb[1], gx, gy + gr*0.30, s*0.15, s*0.105, C.accent);
+    blob(elb[0], elb[1], s*0.085, s*0.085, 0, C.accent2);
+    drawMitt(gx, gy, gr);
+  }
+  ctx.restore();
+}
+
+/* ---- 監督の抗議 ---- */
+const PROTEST_DUR = 1.95;
+const PROTEST_LINES = {
+  // プレイヤーが「ストライク」と言った → 攻撃側の監督が怒る
+  strike: ["今のはボールだろ！", "外れてる！ 見えてないのか！", "低い！ 完全に低いって！", "そんな球を取るのか！"],
+  // 「ボール」と言った → 守備側の監督が怒る
+  ball:   ["入ってるだろ今の！", "ど真ん中だぞ！", "なんで取らないんだ！", "見えてるのか審判！"]
+};
+function angryShout(){                      // 「おい！」と怒鳴る
+  speak([
+    {v:"o", d:0.130, f:225, g:0.95, sc:0.82},
+    {v:"i", d:0.185, f:262, g:1.00, b:1.6, e:0.72}
+  ], 0.34, 0.36);
+  if(!sound) return; const c = ac(); if(!c) return;
+  const t = c.currentTime;                  // 観客のどよめき
+  const n = Math.floor(c.sampleRate*1.1), b = c.createBuffer(1,n,c.sampleRate), d = b.getChannelData(0);
+  let v = 0;
+  for(let i=0;i<n;i++){ v = v*0.985 + (Math.random()*2-1)*0.08; d[i] = v*Math.sin(Math.PI*i/n); }
+  const s = c.createBufferSource(); s.buffer = b;
+  const f = c.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 520; f.Q.value = 0.7;
+  const g = c.createGain(); g.gain.value = 0.5;
+  s.connect(f); f.connect(g); g.connect(c.destination); s.start(t);
+}
+function drawBall(b, spin){
+  ctx.save();
+  ctx.shadowColor = "rgba(255,255,255,.35)"; ctx.shadowBlur = b.r*0.9;
+  ctx.fillStyle = "#F7F4EA";
+  ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0;
+  if(b.r > 5){
+    ctx.strokeStyle = "rgba(200,40,30,.75)";
+    ctx.lineWidth = Math.max(1, b.r*0.13);
+    for(const d of [-1,1]){
+      ctx.beginPath();
+      ctx.arc(b.x + d*b.r*0.62, b.y, b.r*0.92, -0.9 + spin, 0.9 + spin);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function drawMitt(x,y,r){
+  ctx.save();
+  ctx.translate(x, y + r*0.10);
+  ctx.fillStyle = "#2E1D11";
+  ctx.strokeStyle = "#7A5330";
+  ctx.lineWidth = Math.max(1.6, r*0.10);
+  ctx.lineJoin = "round";
+  // 丸いポケット
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
+  // 親指側の張り出し
+  ctx.beginPath();
+  ctx.ellipse(-r*0.72, -r*0.30, r*0.40, r*0.62, -0.5, 0, 7);
+  ctx.fill(); ctx.stroke();
+  // ウェブの編み目
+  ctx.strokeStyle = "rgba(220,180,130,.45)";
+  ctx.lineWidth = Math.max(1, r*0.06);
+  ctx.beginPath();
+  ctx.moveTo(-r*0.52, -r*0.52); ctx.lineTo(-r*0.10, -r*0.86);
+  ctx.moveTo(-r*0.62, -r*0.20); ctx.lineTo(-r*0.16, -r*0.60);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ============ game state ============ */
+const game = {
+  state:"title", half:0, idx:0, calls:0, t:0, timer:0,
+  pitch:null, shake:0, held:null, reason:"", protest:null,
+  lefty:false, setup:null
+};
+let last = performance.now();
+
+function halfLabel(h){ return (Math.floor(h/2)+1) + (h%2===0 ? "回表" : "回裏"); }
+function updateBoard(){
+  $("#bInn").textContent = Math.floor(game.half/2)+1;
+  $("#bHalf").textContent = game.half%2===0 ? "▲表" : "▼裏";
+  $("#bCalls").textContent = game.calls;
+  const pips = $("#bPips"); pips.innerHTML = "";
+  for(let i=0;i<PER_HALF;i++){
+    const d = document.createElement("div");
+    d.className = "pip" + (i < game.idx ? " on" : "");
+    pips.appendChild(d);
+  }
+}
+
+function setButtons(on){
+  $("#btnBall").disabled = !on;
+  $("#btnStrike").disabled = !on;
+}
+function showFlash(cls, big, small){
+  const f = $("#flash");
+  f.className = "flash";
+  f.querySelector("b").textContent = big;
+  f.querySelector("small").textContent = small || "";
+  void f.offsetWidth;
+  f.className = "flash show " + cls;
+}
+
+function start(){
+  game.half = 0; game.idx = 0; game.calls = 0; game.reason = "";
+  $("#title").hidden = true; $("#end").hidden = true; $("#review").hidden = true;
+  $("#protest").hidden = true; game.protest = null;
+  layout(); updateBoard(); nextPitch();
+  try{ startBGM(); }catch(e){}
+}
+
+// iPhone/Safari向け: HTML側から直接呼べる最小の開始口を用意。
+window.__startGame = function(){
+  try{ start(); }catch(e){
+    console.error(e);
+    const st = document.getElementById("jsState");
+    if(st) st.textContent = "開始エラー: " + (e && e.message ? e.message : e);
+    return;
+  }
+  try{
+    const c=ac();
+    if(c && c.state === "suspended") c.resume().then(()=>startBGM()).catch(()=>{});
+  }catch(e){}
+};
+function nextPitch(){
+  game.pitch = newPitch(game.half);
+  if(game.idx === 0) game.lefty = Math.random() < 0.45;   // 打者が代わる
+  game.setup = {                                          // 捕手の構え
+    x: Z.x + rnd(-0.30, 0.30)*Z.w,
+    y: Z.y + rnd(-0.10, 0.42)*Z.h
+  };
+  game.state = "windup"; game.t = 0;
+  tone(1180, 0.07, "sine", 0.05);
+  setButtons(false);
+  $("#clock").style.transform = "scaleX(1)";
+  $("#clock").classList.remove("warn");
+}
+function decisionTime(){ return lerp(3.4, 2.0, game.half/(HALVES-1)); }
+// ゾーンは投球前だけ表示。回が進むほど表示時間が短くなる
+function zoneAlpha(){
+  const st = game.state;
+  if(st === "busted") return 0.92;
+  if(st === "title") return 0.34;
+  if(st !== "windup") return 0;
+  const show = lerp(0.58, 0.24, game.half/(HALVES-1));
+  const t = game.t;
+  if(t > show) return 0;
+  return 0.66 * Math.min(1, t/0.09) * Math.min(1, (show - t)/0.13);
+}
+
+function makeCall(said){          // said === true → ストライク
+  if(game.state !== "await") return;
+  const p = game.pitch;
+  const right = (said === p.truth);
+  game.held = {said, right};
+  setButtons(false);
+  roboCall(said);
+
+  if(p.close || (!p.close && Math.random() < 0.07)){
+    // 判定に不服なチームの監督がベンチから飛び出してくる
+    const away = said;                       // ストライク宣告なら攻撃側、ボールなら守備側
+    game.protest = {
+      away,
+      side: away ? 1 : -1,
+      line: pick(PROTEST_LINES[said ? "strike" : "ball"]),
+      who: (away ? "ビジター" : "ホーム") + "・監督"
+    };
+    $("#protestWho").textContent = game.protest.who;
+    $("#protestLine").textContent = game.protest.line;
+    $("#protest").className = "claim " + (away ? "away right" : "home left");
+    $("#protest").hidden = true;
+    game.state = "protest"; game.t = 0;
+    setTimeout(() => { try{ angryShout(); }catch(e){} }, 380);
+    return;
+  }
+  if(right){
+    game.calls++;
+    showFlash(said ? "strike" : "ball", said ? "ストライク" : "ボール", "CALL " + game.calls);
+    game.state = "result"; game.t = 0;
+  } else {
+    showFlash("miss", "誤審", said ? "SHOULD BE BALL" : "SHOULD BE STRIKE");
+    tone(150, 0.7, "sawtooth", 0.16, 70);
+    game.reason = "大誤審。" + (said ? "明らかにボール球でした。" : "ゾーンを通っていました。");
+    game.state = "busted"; game.t = 0;
+  }
+}
+function advance(){
+  game.idx++;
+  if(game.idx >= PER_HALF){ game.idx = 0; game.half++; }
+  updateBoard();
+  if(game.half >= HALVES){ finish(true); return; }
+  nextPitch();
+}
+function finish(win){
+  game.state = "over";
+  $("#protest").hidden = true;
+  stopBGM();
+  setButtons(false);
+  $("#endEye").textContent = win ? "NO BLOWN CALLS" : "GAME SET";
+  $("#endTitle").innerHTML = win ? 'ジャッジ<em>完全試合</em>' : 'ゲーム<em>セット</em>';
+  $("#endWhy").textContent = win
+    ? "9回裏まで誤審ゼロ。両軍ベンチから文句のない、完璧な試合でした。"
+    : game.reason;
+  $("#endInn").textContent = halfLabel(Math.min(game.half, HALVES-1));
+  $("#endCalls").textContent = game.calls + "/" + TOTAL;
+  $("#end").hidden = false;
+  if(win){ tone(523,0.14,"triangle",0.15); setTimeout(()=>tone(659,0.14,"triangle",0.15),150); setTimeout(()=>tone(784,0.4,"triangle",0.15),300); }
+}
+
+/* ============ review sequence ============ */
+const rev = { on:false, t:0, phase:0, p:null, said:false, right:false };
+function openReview(){
+  const p = game.pitch;
+  rev.on = true; rev.t = 0; rev.phase = 0;
+  rev.p = p; rev.said = game.held.said; rev.right = game.held.right;
+  $("#revInn").textContent = halfLabel(game.half).toUpperCase();
+  $("#revSay").textContent = "監督がリクエスト。あなたの判定は「" + (rev.said ? "ストライク" : "ボール") + "」";
+  $("#revDat").textContent = p.type.n.toUpperCase() + " / " + p.kmh + " km/h";
+  $("#revStatus").innerHTML = 'リプレイ検証中…';
+  $("#revStatus").className = "sm";
+  $("#revTap").hidden = false;
+  $("#review").hidden = false;
+  fit(rcv, rctx);
+  tone(320, 0.5, "square", 0.07, 240);
+  game.state = "review";
+}
+function revVerdict(){
+  rev.phase = 2;
+  $("#revTap").hidden = true;
+  const truthTxt = rev.p.truth ? "ストライク" : "ボール";
+  const mm = Math.abs(rev.p.margin / (Z.r*2) * 7.4).toFixed(1);   // ボール直径7.4cmでcm換算
+  $("#revSay").textContent = "判定は「" + truthTxt + "」";
+  $("#revDat").textContent = (rev.p.margin >= 0 ? "ゾーン内側 " : "ゾーン外側 ") + mm + " cm";
+  if(rev.right){
+    $("#revStatus").className = "big upheld";
+    $("#revStatus").textContent = "判定は覆りません";
+    tone(660, 0.5, "triangle", 0.13);
+    setTimeout(()=>{ closeReview(true); }, 1700);
+  } else {
+    $("#revStatus").className = "big overturn";
+    $("#revStatus").textContent = "判定が覆りました";
+    tone(180, 0.8, "sawtooth", 0.16, 90);
+    game.reason = "リクエストで判定が覆りました。正しくは「" + truthTxt + "」。";
+    setTimeout(()=>{ $("#review").hidden = true; rev.on = false; finish(false); }, 2000);
+  }
+}
+function closeReview(ok){
+  $("#review").hidden = true; rev.on = false;
+  game.calls++;
+  updateBoard();
+  showFlash(rev.said ? "strike" : "ball", rev.said ? "ストライク" : "ボール", "UPHELD");
+  game.state = "result"; game.t = 0;
+}
+function revTick(dt){
+  if(!rev.on) return;
+  rev.t += dt;
+  const r = rcv.getBoundingClientRect(), w = r.width, h = r.height;
+  rctx.clearRect(0,0,w,h);
+  // スロー再生: 飛翔の終盤をズームして再生
+  const dur = 2.6;
+  const raw = clamp(rev.t/dur, 0, 1);
+  const t = lerp(0.60, 1.0, raw);
+  const b = ballAt(rev.p, t);
+  const zoom = Math.min(w/(Z.w*2.6), h/(Z.h*2.2));
+  rctx.save();
+  rctx.fillStyle = "#060A08"; rctx.fillRect(0,0,w,h);
+  rctx.translate(w/2, h/2); rctx.scale(zoom, zoom); rctx.translate(-Z.x, -Z.y);
+  // ゾーン（検証用に実線＋発光）
+  rctx.strokeStyle = "#FFB021"; rctx.lineWidth = 2/zoom;
+  rctx.shadowColor = "rgba(255,176,33,.8)"; rctx.shadowBlur = 10;
+  rctx.strokeRect(Z.x-Z.w/2, Z.y-Z.h/2, Z.w, Z.h);
+  rctx.shadowBlur = 0;
+  // 軌道
+  rctx.strokeStyle = "rgba(255,255,255,.28)"; rctx.lineWidth = 1.2/zoom;
+  rctx.beginPath();
+  for(let i=0;i<=24;i++){
+    const tt = lerp(0.60, t, i/24), q = ballAt(rev.p, tt);
+    i ? rctx.lineTo(q.x,q.y) : rctx.moveTo(q.x,q.y);
+  }
+  rctx.stroke();
+  // ボール
+  rctx.fillStyle = "#F7F4EA";
+  rctx.beginPath(); rctx.arc(b.x, b.y, b.r, 0, 7); rctx.fill();
+  if(rev.phase >= 2){
+    // 計測線
+    rctx.setLineDash([4/zoom, 4/zoom]);
+    rctx.strokeStyle = rev.p.truth ? "#37D66B" : "#F0452F";
+    rctx.lineWidth = 1.4/zoom;
+    rctx.beginPath(); rctx.arc(b.x, b.y, b.r, 0, 7); rctx.stroke();
+    const ex = clamp(b.x, Z.x-Z.w/2, Z.x+Z.w/2), ey = clamp(b.y, Z.y-Z.h/2, Z.y+Z.h/2);
+    rctx.beginPath(); rctx.moveTo(b.x, b.y); rctx.lineTo(ex, ey); rctx.stroke();
+    rctx.setLineDash([]);
+  }
+  rctx.restore();
+  // 走査線
+  rctx.save(); rctx.globalAlpha = 0.06; rctx.fillStyle = "#fff";
+  for(let y = (rev.t*60)%4; y < h; y += 4) rctx.fillRect(0, y, w, 1);
+  rctx.restore();
+
+  if(rev.phase === 0 && raw >= 1){ rev.phase = 1; setTimeout(()=>{ if(rev.on && rev.phase===1) revVerdict(); }, 700); }
+}
+
+/* ============ main loop ============ */
+function draw(dt){
+  ctx.save();
+  if(game.shake > 0 && !reduce){
+    const s = game.shake;
+    ctx.translate(rnd(-s,s), rnd(-s,s));
+    game.shake = Math.max(0, game.shake - dt*26);
+  }
+  ctx.clearRect(-20,-20,W+40,H+40);
+  drawField();
+
+  const st = game.state;
+  const showBall = (st==="pitch"||st==="await"||st==="protest"||st==="busted"||st==="result"||st==="review");
+  const phase = st==="windup" ? clamp(game.t/0.62, 0, 1) : (st==="title" ? 0 : 1);
+  const after = st==="windup" ? 0
+              : st==="pitch" ? clamp(game.t/game.pitch.flight, 0, 1)
+              : (st==="title" ? 0 : 1);
+  drawPitcher(phase, after);
+  drawPlate();
+  drawBatter(phase, after, game.lefty);
+
+  const revealZone = (st==="busted");
+  const za = zoneAlpha();
+  if(za > 0) drawZone("full", za);
+
+  // ミット: 投球中は構えた位置、捕球後はボールの位置
+  let gx = Z.x, gy = Z.y + Z.h*0.34, gr = Z.r*1.8;
+  if(game.pitch && game.setup && (st==="windup" || st==="pitch")){
+    gx = game.setup.x; gy = game.setup.y;
+  } else if(game.pitch && showBall){
+    const b = ballAt(game.pitch, 1);
+    gx = b.x; gy = b.y; gr = Z.r*1.95;
+  }
+  drawCatcher(gx, gy, gr);
+
+  if(st === "pitch"){
+    const t = clamp(game.t/game.pitch.flight, 0, 1);
+    // 残像
+    for(let i=1;i<=3;i++){
+      const tt = Math.max(0, t - i*0.035);
+      const q = ballAt(game.pitch, tt);
+      ctx.save(); ctx.globalAlpha = 0.16/i; ctx.fillStyle="#fff";
+      ctx.beginPath(); ctx.arc(q.x,q.y,q.r*0.9,0,7); ctx.fill(); ctx.restore();
+    }
+    drawBall(ballAt(game.pitch, t), game.t*14);
+  } else if(showBall && st !== "pitch"){
+    const b = ballAt(game.pitch, 1);
+    drawBall(b, 0);
+    if(revealZone){
+      ctx.save();
+      ctx.strokeStyle = "#F0452F"; ctx.lineWidth = 2; ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r*1.5, 0, 7); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+function step(now){
+  const dt = Math.min(0.05, (now - last)/1000); last = now;
+  const st = game.state;
+
+  if(st === "windup"){
+    game.t += dt;
+    if(game.t >= 0.62){ game.state = "pitch"; game.t = 0; tone(220,0.05,"square",0.05); }
+  } else if(st === "pitch"){
+    game.t += dt;
+    if(game.t >= game.pitch.flight){
+      game.state = "await"; game.t = 0; game.timer = decisionTime();
+      mitt(); game.shake = 4; setButtons(true);
+    }
+  } else if(st === "await"){
+    game.timer -= dt;
+    const k = clamp(game.timer/decisionTime(), 0, 1);
+    const el = $("#clock");
+    el.style.transform = "scaleX(" + k + ")";
+    el.classList.toggle("warn", k < 0.3);
+    if(game.timer <= 0){
+      setButtons(false);
+      showFlash("miss", "判定遅れ", "TOO SLOW");
+      tone(150, 0.7, "sawtooth", 0.16, 70);
+      game.reason = "判定が遅すぎました。球審は即座にコールしなければなりません。";
+      game.state = "busted"; game.t = 0;
+    }
+  } else if(st === "protest"){
+    game.t += dt;
+    const pe = $("#protest");
+    if(game.t > 0.22 && pe.hidden) pe.hidden = false;
+    if(game.t >= PROTEST_DUR){ pe.hidden = true; openReview(); }
+  } else if(st === "result"){
+    game.t += dt;
+    if(game.t >= 0.85) advance();
+  } else if(st === "busted"){
+    game.t += dt;
+    if(game.t >= 1.3) finish(false);
+  }
+
+  if(rev.on) revTick(dt);
+  if(st !== "over" || true) draw(dt);
+  requestAnimationFrame(step);
+}
+
+/* ============ input ============ */
+$("#btnStrike").addEventListener("click", () => makeCall(true));
+$("#btnBall").addEventListener("click", () => makeCall(false));
+// btnStart は onclick から window.__startGame() を直接呼ぶ。
+// clickイベントにも同じ入口を登録して、PC操作にも対応。
+$("#btnStart").addEventListener("click", e => {
+  if(e.detail === 0) window.__startGame();
+});
+$("#btnAgain").addEventListener("click", () => {
+  start();
+  try{ const c=ac(); if(c && c.state === "suspended") c.resume().catch(()=>{}); }catch(e){}
+});
+$("#btnSound").addEventListener("click", e => {
+  sound = !sound;
+  e.currentTarget.textContent = sound ? "🔊 BGM・音声あり" : "🔇 音なし";
+  if(sound && game.state!=="title" && game.state!=="over") startBGM(); else if(!sound) stopBGM();
+});
+$("#field").addEventListener("click", () => {
+  if(game.state === "protest" && game.t > 0.9) game.t = PROTEST_DUR;
+});
+$("#review").addEventListener("click", () => {
+  if(rev.on && rev.phase < 2) revVerdict();
+});
+addEventListener("keydown", e => {
+  if(e.repeat) return;
+  const k = e.key.toLowerCase();
+  if(k === "s" || e.key === "ArrowRight") makeCall(true);
+  else if(k === "b" || e.key === "ArrowLeft") makeCall(false);
+  else if(e.key === " " || e.key === "Enter"){
+    if(!$("#title").hidden){ ac(); start(); }
+    else if(!$("#end").hidden) start();
+  }
+});
+document.addEventListener("touchmove", e => { if(e.touches.length>1) e.preventDefault(); }, {passive:false});
+
+layout();
+updateBoard();
+const jsState = document.getElementById("jsState");
+if(jsState) jsState.textContent = "準備OK / JavaScript 起動済み";
+requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
